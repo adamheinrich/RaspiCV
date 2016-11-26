@@ -82,6 +82,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "RaspiPreview.h"
 #include "RaspiCLI.h"
 
+#include "cv.h"
+
 #include <semaphore.h>
 
 // Standard port setting for the camera component
@@ -1306,6 +1308,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
             {
                if(pData->pstate->inlineMotionVectors)
                {
+                  cv_process_imv(buffer->data, buffer->length, buffer->pts);
                   bytes_written = fwrite(buffer->data, 1, buffer->length, pData->imv_file_handle);
                   if(pData->flush_buffers) fflush(pData->imv_file_handle);
                }
@@ -1405,6 +1408,7 @@ static void splitter_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *bu
       if (bytes_to_write)
       {
          mmal_buffer_header_mem_lock(buffer);
+         cv_process_img(buffer->data, bytes_to_write, buffer->pts);
          bytes_written = fwrite(buffer->data, 1, bytes_to_write, pData->raw_file_handle);
          mmal_buffer_header_mem_unlock(buffer);
 
@@ -2744,6 +2748,8 @@ int main(int argc, const char **argv)
                   }
                }
 
+               cv_init(state.width, state.height, state.framerate, state.raw_output_fmt);
+
                int initialCapturing=state.bCapturing;
                while (running)
                {
@@ -2880,6 +2886,8 @@ error:
       raspipreview_destroy(&state.preview_parameters);
       destroy_splitter_component(&state);
       destroy_camera_component(&state);
+
+      cv_close();
 
       if (state.verbose)
          fprintf(stderr, "Close down completed, all components disconnected, disabled and destroyed\n\n");
